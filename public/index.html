@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clarity | Noise-Reduction Trading Terminal</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        bgDark: '#0B0E14',
+                        panelBg: '#151924',
+                        borderDark: '#2A2E39',
+                        textMuted: '#848E9C',
+                        textBright: '#EAECEF',
+                        bullish: '#26A69A',
+                        bearish: '#EF5350',
+                        warning: '#F5A623',
+                        info: '#2962FF'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0B0E14; color: #EAECEF; overflow: hidden; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0B0E14; }
+        ::-webkit-scrollbar-thumb { background: #2A2E39; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+        .loader {
+            border: 3px solid #2A2E39;
+            border-top: 3px solid #2962FF;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .glass-panel {
+            background: rgba(21, 25, 36, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen">
+    <header class="h-16 border-b border-borderDark panelBg flex items-center justify-between px-4 shrink-0 z-20">
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-layer-group text-info text-xl"></i>
+                <h1 class="font-bold text-lg tracking-wide">CLARITY<span class="text-textMuted font-normal text-sm ml-2">Terminal</span></h1>
+            </div>
+
+            <div class="h-6 w-px bg-borderDark"></div>
+
+            <div class="flex items-center gap-2">
+                <label class="text-xs text-textMuted font-medium uppercase tracking-wider">Asset</label>
+                <select id="assetSelect" class="bg-bgDark border border-borderDark text-textBright text-sm rounded px-3 py-1.5 focus:outline-none focus:border-info mono font-medium">
+                    <option value="BTCUSDT">BTC / USDT (Binance)</option>
+                    <option value="ETHUSDT">ETH / USDT (Binance)</option>
+                    <option value="SOLUSDT">SOL / USDT (Binance)</option>
+                    <option value="XRPUSDT">XRP / USDT (Binance)</option>
+                    <optgroup label="Stocks & ETFs (Requires Finnhub Key)">
+                        <option value="AAPL">Apple (AAPL)</option>
+                        <option value="TSLA">Tesla (TSLA)</option>
+                        <option value="NVDA">Nvidia (NVDA)</option>
+                        <option value="SPY">S&P 500 (SPY)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="flex items-center gap-1 bg-bgDark rounded border border-borderDark p-0.5 ml-2" id="tfSelector">
+                <button class="tf-btn px-3 py-1 text-sm rounded font-medium text-textMuted hover:text-textBright transition" data-tf="15m">15m</button>
+                <button class="tf-btn px-3 py-1 text-sm rounded font-medium bg-borderDark text-textBright transition" data-tf="1h">1H</button>
+                <button class="tf-btn px-3 py-1 text-sm rounded font-medium text-textMuted hover:text-textBright transition" data-tf="4h">4H</button>
+                <button class="tf-btn px-3 py-1 text-sm rounded font-medium text-textMuted hover:text-textBright transition" data-tf="1d">1D</button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div id="dataStatus" class="flex items-center gap-2 text-xs font-mono bg-bgDark px-3 py-1.5 rounded border border-borderDark">
+                <span class="relative flex h-2.5 w-2.5">
+                  <span id="statusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-bullish opacity-75 hidden"></span>
+                  <span id="statusDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning"></span>
+                </span>
+                <span id="statusText" class="text-textMuted">Connecting...</span>
+            </div>
+
+            <div class="flex items-center gap-2 border-l border-borderDark pl-4">
+                <button id="btnApiKey" class="px-3 py-1.5 bg-bgDark border border-borderDark rounded text-sm font-medium text-warning hover:text-textBright transition flex items-center gap-2" onclick="openApiModal()">
+                    <i class="fa-solid fa-key"></i> API
+                </button>
+                <button id="btnAlert" class="px-3 py-1.5 bg-bgDark border border-borderDark rounded text-sm font-medium text-textMuted hover:text-info transition flex items-center gap-2" onclick="toggleAlerts()">
+                    <i class="fa-solid fa-bell-slash"></i> Alerts
+                </button>
+                <button id="btnHA" class="px-3 py-1.5 bg-bgDark border border-borderDark rounded text-sm font-medium text-textMuted hover:text-textBright transition flex items-center gap-2" onclick="toggleHeikinAshi()">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Heikin-Ashi
+                </button>
+                <button id="btnEMA" class="px-3 py-1.5 bg-bgDark border border-borderDark rounded text-sm font-medium text-info transition flex items-center gap-2" onclick="toggleEMAs()">
+                    <i class="fa-solid fa-wave-square"></i> EMAs
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden">
+        <aside class="w-80 border-r border-borderDark bg-panelBg flex flex-col z-10 shrink-0 overflow-y-auto">
+            <div class="p-5 border-b border-borderDark">
+                <div class="flex justify-between items-start mb-1">
+                    <div class="text-textMuted text-sm font-medium" id="sidebarSymbol">BTC/USDT</div>
+                    <div class="text-xs px-2 py-0.5 rounded bg-bgDark border border-borderDark text-textMuted" id="sidebarTf">1H Chart</div>
+                </div>
+                <div class="flex items-baseline gap-3">
+                    <div class="text-3xl font-bold mono tracking-tight" id="currentPrice">--</div>
+                    <div class="text-sm font-medium mono" id="priceChange">--</div>
+                </div>
+            </div>
+
+            <div class="p-5 border-b border-borderDark">
+                <div class="flex items-center gap-2 mb-4">
+                    <i class="fa-solid fa-satellite-dish text-warning"></i>
+                    <h2 class="font-semibold text-sm uppercase tracking-wider text-textBright">Noise Reduction (SNR)</h2>
+                </div>
+
+                <div class="bg-bgDark rounded-lg border border-borderDark p-4 relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs text-textMuted">ADX Trend Strength</span>
+                        <span class="text-xl font-bold mono" id="adxValue">--</span>
+                    </div>
+
+                    <div class="h-2 w-full bg-panelBg rounded-full overflow-hidden mb-3 border border-borderDark">
+                        <div id="adxBar" class="h-full bg-warning transition-all duration-500" style="width: 0%;"></div>
+                    </div>
+
+                    <div class="flex justify-between text-[10px] text-textMuted uppercase font-bold tracking-widest mb-4">
+                        <span>Chop (0-20)</span>
+                        <span>Trend (25+)</span>
+                        <span>Strong (40+)</span>
+                    </div>
+
+                    <div id="snrAlertBox" class="p-3 rounded bg-panelBg border border-borderDark text-xs leading-relaxed">
+                        Analyzing market volatility...
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-5 border-b border-borderDark">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-gauge-high text-info"></i>
+                        <h2 class="font-semibold text-sm uppercase tracking-wider text-textBright">RSI (14)</h2>
+                    </div>
+                    <span class="text-xl font-bold mono text-textBright" id="rsiValue">--</span>
+                </div>
+                <div class="w-full h-1.5 bg-panelBg rounded-full overflow-hidden border border-borderDark relative">
+                    <div id="rsiBar" class="h-full bg-info transition-all duration-500" style="width: 50%;"></div>
+                    <div class="absolute top-0 bottom-0 left-[30%] w-px bg-warning/50"></div>
+                    <div class="absolute top-0 bottom-0 left-[70%] w-px bg-warning/50"></div>
+                </div>
+            </div>
+
+            <div class="p-5 flex-1">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-microscope text-info"></i>
+                        <h2 class="font-semibold text-sm uppercase tracking-wider text-textBright">MTF Confluence</h2>
+                    </div>
+                    <div id="mtfLoader" class="loader hidden"></div>
+                </div>
+
+                <div class="space-y-3" id="mtfContainer">
+                    <div class="flex items-center justify-between p-3 rounded bg-bgDark border border-borderDark">
+                        <span class="font-mono text-sm font-bold w-12">15m</span>
+                        <div class="flex-1 mx-3 h-px bg-borderDark dashed"></div>
+                        <span id="mtf-15m" class="text-xs font-bold uppercase tracking-wider text-textMuted">Loading...</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded bg-bgDark border border-borderDark border-l-2 border-l-info">
+                        <span class="font-mono text-sm font-bold w-12">1H</span>
+                        <div class="flex-1 mx-3 h-px bg-borderDark dashed"></div>
+                        <span id="mtf-1h" class="text-xs font-bold uppercase tracking-wider text-textMuted">Loading...</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded bg-bgDark border border-borderDark">
+                        <span class="font-mono text-sm font-bold w-12">4H</span>
+                        <div class="flex-1 mx-3 h-px bg-borderDark dashed"></div>
+                        <span id="mtf-4h" class="text-xs font-bold uppercase tracking-wider text-textMuted">Loading...</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded bg-bgDark border border-borderDark">
+                        <span class="font-mono text-sm font-bold w-12">1D</span>
+                        <div class="flex-1 mx-3 h-px bg-borderDark dashed"></div>
+                        <span id="mtf-1d" class="text-xs font-bold uppercase tracking-wider text-textMuted">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 p-4 rounded-lg border border-borderDark bg-bgDark text-center">
+                    <div class="text-[10px] text-textMuted uppercase tracking-widest mb-1">Overall Bias</div>
+                    <div id="mtfVerdict" class="text-lg font-bold">ANALYZING</div>
+                </div>
+            </div>
+        </aside>
+
+        <section class="flex-1 relative flex flex-col">
+            <div class="absolute top-4 left-4 z-10 glass-panel border border-borderDark rounded px-3 py-2 text-xs font-mono pointer-events-none">
+                <div class="flex gap-4">
+                    <span class="text-textBright font-bold" id="legendSymbol">BTCUSDT</span>
+                    <span class="text-textMuted" id="legendO">O: <span class="text-textBright">--</span></span>
+                    <span class="text-textMuted" id="legendH">H: <span class="text-textBright">--</span></span>
+                    <span class="text-textMuted" id="legendL">L: <span class="text-textBright">--</span></span>
+                    <span class="text-textMuted" id="legendC">C: <span class="text-textBright">--</span></span>
+                </div>
+                <div class="flex gap-3 mt-1" id="legendEMAs">
+                    <span style="color: #2962FF">EMA(20): <span id="legendE20">--</span></span>
+                    <span style="color: #F5A623">EMA(50): <span id="legendE50">--</span></span>
+                    <span style="color: #9C27B0">EMA(200): <span id="legendE200">--</span></span>
+                </div>
+            </div>
+
+            <div id="chartContainer" class="flex-1 w-full h-full"></div>
+
+            <div id="chartLoader" class="absolute inset-0 bg-bgDark/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center hidden">
+                <div class="loader mb-4"></div>
+                <div class="text-sm font-medium text-textMuted" id="loaderText">Fetching real market data...</div>
+            </div>
+        </section>
+    </main>
+
+    <div id="apiModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-panelBg border border-borderDark rounded-lg p-6 w-96 shadow-2xl">
+            <h3 class="text-lg font-bold mb-2">API Key Configuration</h3>
+            <p class="text-xs text-textMuted mb-4">Enter a free <a href="https://finnhub.io" target="_blank" class="text-info underline">Finnhub.io</a> API key to unlock real-time Stocks data. Crypto (Binance) runs natively without a key.</p>
+            <input type="password" id="finnhubKey" placeholder="Finnhub API Key" class="w-full bg-bgDark border border-borderDark rounded px-3 py-2 text-sm focus:outline-none focus:border-info mb-4 text-textBright">
+            <div class="flex justify-end gap-2">
+                <button onclick="closeApiModal()" class="px-4 py-2 text-sm text-textMuted hover:text-textBright">Cancel</button>
+                <button onclick="saveApiKey()" class="px-4 py-2 bg-info/20 text-info border border-info/50 rounded text-sm hover:bg-info hover:text-white transition">Save & Reload</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            symbol: 'BTCUSDT',
+            tf: '1h',
+            isHeikinAshi: false,
+            showEMAs: true,
+            alertsEnabled: false,
+            apiKey: localStorage.getItem('finnhubKey') || '',
+            rawCandles: [],
+            haCandles: [],
+            emas: { e20: [], e50: [], e200: [] },
+            vwap: [],
+            ws: null,
+            chart: null,
+            series: {
+                main: null,
+                volume: null,
+                ema20: null,
+                ema50: null,
+                ema200: null,
+                vwap: null
+            },
+            srLines: { support: null, resistance: null },
+            mtfData: { '15m': null, '1h': null, '4h': null, '1d': null }
+        };
+
+        const els = {
+            assetSelect: document.getElementById('assetSelect'),
+            tfButtons: document.querySelectorAll('.tf-btn'),
+            btnHA: document.getElementById('btnHA'),
+            btnEMA: document.getElementById('btnEMA'),
+            btnApiKey: document.getElementById('btnApiKey'),
+            btnAlert: document.getElementById('btnAlert'),
+            statusText: document.getElementById('statusText'),
+            statusDot: document.getElementById('statusDot'),
+            statusPing: document.getElementById('statusPing'),
+            chartContainer: document.getElementById('chartContainer'),
+            chartLoader: document.getElementById('chartLoader'),
+            loaderText: document.getElementById('loaderText'),
+            currentPrice: document.getElementById('currentPrice'),
+            priceChange: document.getElementById('priceChange'),
+            sidebarSymbol: document.getElementById('sidebarSymbol'),
+            sidebarTf: document.getElementById('sidebarTf'),
+            adxValue: document.getElementById('adxValue'),
+            adxBar: document.getElementById('adxBar'),
+            snrAlertBox: document.getElementById('snrAlertBox'),
+            rsiValue: document.getElementById('rsiValue'),
+            rsiBar: document.getElementById('rsiBar'),
+            mtfLoader: document.getElementById('mtfLoader'),
+            mtfVerdict: document.getElementById('mtfVerdict'),
+            apiModal: document.getElementById('apiModal'),
+            finnhubKeyInput: document.getElementById('finnhubKey'),
+            legendSymbol: document.getElementById('legendSymbol'),
+            legendO: document.getElementById('legendO').querySelector('span'),
+            legendH: document.getElementById('legendH').querySelector('span'),
+            legendL: document.getElementById('legendL').querySelector('span'),
+            legendC: document.getElementById('legendC').querySelector('span'),
+            legendE20: document.getElementById('legendE20'),
+            legendE50: document.getElementById('legendE50'),
+            legendE200: document.getElementById('legendE200'),
+            legendEMAs: document.getElementById('legendEMAs')
+        };
+
+        async function init() {
+            initChart();
+            setupEventListeners();
+            await loadMainChartData();
+            loadMTFData();
+        }
+
+        function initChart() {
+            const chartOptions = {
+                layout: {
+                    background: { type: 'solid', color: '#0B0E14' },
+                    textColor: '#848E9C',
+                },
+                grid: {
+                    vertLines: { color: 'rgba(42, 46, 57, 0.5)', style: 1 },
+                    horzLines: { color: 'rgba(42, 46, 57, 0.5)', style: 1 },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                    vertLine: { color: '#848E9C', labelBackgroundColor: '#151924' },
+                    horzLine: { color: '#848E9C', labelBackgroundColor: '#151924' },
+                },
+                rightPriceScale: {
+                    borderColor: '#2A2E39',
+                    autoScale: true,
+                },
+                timeScale: {
+                    borderColor: '#2A2E39',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            };
+
+            state.chart = LightweightCharts.createChart(els.chartContainer, chartOptions);
+
+            state.series.main = state.chart.addCandlestickSeries({
+                upColor: '#26A69A',
+                downColor: '#EF5350',
+                borderVisible: false,
+                wickUpColor: '#26A69A',
+                wickDownColor: '#EF5350',
+            });
+
+            state.series.volume = state.chart.addHistogramSeries({
+                color: '#26A69A',
+                priceFormat: { type: 'volume' },
+                priceScaleId: '',
+                scaleMargins: { top: 0.8, bottom: 0 },
+            });
+
+            state.series.ema20 = state.chart.addLineSeries({ color: '#2962FF', lineWidth: 2, crosshairMarkerVisible: false });
+            state.series.ema50 = state.chart.addLineSeries({ color: '#F5A623', lineWidth: 2, crosshairMarkerVisible: false });
+            state.series.ema200 = state.chart.addLineSeries({ color: '#9C27B0', lineWidth: 2, crosshairMarkerVisible: false });
+            state.series.vwap = state.chart.addLineSeries({ color: '#EAECEF', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, crosshairMarkerVisible: false });
+
+            new ResizeObserver(entries => {
+                if (entries.length === 0 || entries[0].target !== els.chartContainer) return;
+                const newRect = entries[0].contentRect;
+                state.chart.applyOptions({ width: newRect.width, height: newRect.height });
+            }).observe(els.chartContainer);
+
+            state.chart.subscribeCrosshairMove(param => {
+                if (param.time && param.seriesData.size > 0) {
+                    const data = param.seriesData.get(state.series.main);
+                    if (data) updateLegend(data);
+
+                    const e20 = param.seriesData.get(state.series.ema20);
+                    const e50 = param.seriesData.get(state.series.ema50);
+                    const e200 = param.seriesData.get(state.series.ema200);
+                    if (e20) els.legendE20.textContent = e20.value.toFixed(2);
+                    if (e50) els.legendE50.textContent = e50.value.toFixed(2);
+                    if (e200) els.legendE200.textContent = e200.value.toFixed(2);
+                } else {
+                    const last = state.isHeikinAshi ? state.haCandles[state.haCandles.length - 1] : state.rawCandles[state.rawCandles.length - 1];
+                    if (last) updateLegend(last);
+
+                    if (state.emas.e20.length) els.legendE20.textContent = state.emas.e20[state.emas.e20.length - 1].value.toFixed(2);
+                    if (state.emas.e50.length) els.legendE50.textContent = state.emas.e50[state.emas.e50.length - 1].value.toFixed(2);
+                    if (state.emas.e200.length) els.legendE200.textContent = state.emas.e200[state.emas.e200.length - 1].value.toFixed(2);
+                }
+            });
+        }
+
+        function updateLegend(data) {
+            els.legendO.textContent = data.open.toFixed(2);
+            els.legendH.textContent = data.high.toFixed(2);
+            els.legendL.textContent = data.low.toFixed(2);
+            els.legendC.textContent = data.close.toFixed(2);
+        }
+
+        function setupEventListeners() {
+            els.assetSelect.addEventListener('change', async (e) => {
+                state.symbol = e.target.value;
+                els.sidebarSymbol.textContent = state.symbol.replace('USDT', '/USDT');
+                els.legendSymbol.textContent = state.symbol;
+                await loadMainChartData();
+                loadMTFData();
+            });
+
+            els.tfButtons.forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const selectedTf = e.target.dataset.tf;
+                    if (selectedTf === state.tf) return;
+
+                    els.tfButtons.forEach(b => {
+                        b.classList.remove('bg-borderDark', 'text-textBright');
+                        b.classList.add('text-textMuted');
+                    });
+                    e.target.classList.add('bg-borderDark', 'text-textBright');
+                    e.target.classList.remove('text-textMuted');
+
+                    state.tf = selectedTf;
+                    els.sidebarTf.textContent = e.target.textContent + ' Chart';
+
+                    await loadMainChartData();
+                });
+            });
+        }
+
+        function toggleHeikinAshi() {
+            state.isHeikinAshi = !state.isHeikinAshi;
+            if (state.isHeikinAshi) {
+                els.btnHA.classList.remove('bg-bgDark', 'text-textMuted');
+                els.btnHA.classList.add('bg-info/20', 'text-info', 'border-info/50');
+                state.series.main.setData(state.haCandles);
+            } else {
+                els.btnHA.classList.add('bg-bgDark', 'text-textMuted');
+                els.btnHA.classList.remove('bg-info/20', 'text-info', 'border-info/50');
+                state.series.main.setData(state.rawCandles);
+            }
+        }
+
+        function toggleEMAs() {
+            state.showEMAs = !state.showEMAs;
+            if (state.showEMAs) {
+                els.btnEMA.classList.remove('text-textMuted');
+                els.btnEMA.classList.add('text-info');
+                els.legendEMAs.classList.remove('hidden');
+                state.series.ema20.applyOptions({ visible: true });
+                state.series.ema50.applyOptions({ visible: true });
+                state.series.ema200.applyOptions({ visible: true });
+                state.series.vwap.applyOptions({ visible: true });
+            } else {
+                els.btnEMA.classList.add('text-textMuted');
+                els.btnEMA.classList.remove('text-info');
+                els.legendEMAs.classList.add('hidden');
+                state.series.ema20.applyOptions({ visible: false });
+                state.series.ema50.applyOptions({ visible: false });
+                state.series.ema200.applyOptions({ visible: false });
+                state.series.vwap.applyOptions({ visible: false });
+            }
+        }
+
+        function openApiModal() { els.finnhubKeyInput.value = state.apiKey; els.apiModal.classList.remove('hidden'); }
+        function closeApiModal() { els.apiModal.classList.add('hidden'); }
+        function saveApiKey() {
+            state.apiKey = els.finnhubKeyInput.value.trim();
+            localStorage.setItem('finnhubKey', state.apiKey);
+            closeApiModal();
+            loadMainChartData();
+        }
+
+        function toggleAlerts() {
+            state.alertsEnabled = !state.alertsEnabled;
+            if (state.alertsEnabled) {
+                els.btnAlert.classList.remove('text-textMuted');
+                els.btnAlert.classList.add('text-warning');
+                els.btnAlert.innerHTML = '<i class="fa-solid fa-bell"></i> Alerts On';
+                playAlertSound();
+            } else {
+                els.btnAlert.classList.add('text-textMuted');
+                els.btnAlert.classList.remove('text-warning');
+                els.btnAlert.innerHTML = '<i class="fa-solid fa-bell-slash"></i> Alerts';
+            }
+        }
+
+        function playAlertSound() {
+            if (!state.alertsEnabled) return;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+        }
+
+        async function fetchBinanceKlines(symbol, interval, limit = 500) {
+            const params = new URLSearchParams({ symbol, interval, limit: String(limit) });
+            const res = await fetch(`/api/market?${params.toString()}${state.apiKey ? `&apiKey=${encodeURIComponent(state.apiKey)}` : ''}`);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'API Error');
+            }
+            const data = await res.json();
+            return data.map(d => ({
+                time: d.time,
+                open: d.open,
+                high: d.high,
+                low: d.low,
+                close: d.close,
+                volume: d.volume
+            }));
+        }
+
+        async function fetchFinnhubCandles(symbol, interval, limit = 500) {
+            if (!state.apiKey) return [];
+            const params = new URLSearchParams({ symbol, interval, limit: String(limit), apiKey: state.apiKey });
+            const res = await fetch(`/api/market?${params.toString()}`);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'API Error');
+            }
+            const data = await res.json();
+            return data;
+        }
+
+        async function loadMainChartData() {
+            els.chartLoader.classList.remove('hidden');
+            const isCrypto = state.symbol.includes('USDT');
+
+            if (!isCrypto && !state.apiKey) {
+                setStatus('API Key Required for Stocks', 'bearish', false);
+                els.chartLoader.classList.add('hidden');
+                openApiModal();
+                return;
+            }
+
+            setStatus('Fetching API...', 'warning', false);
+            els.loaderText.textContent = `Fetching ${isCrypto ? 'Binance' : 'Finnhub'} Data...`;
+
+            if (state.ws) state.ws.close();
+
+            const data = isCrypto ? await fetchBinanceKlines(state.symbol, state.tf, 500) : await fetchFinnhubCandles(state.symbol, state.tf, 500);
+
+            if (data.length === 0) {
+                setStatus(isCrypto ? 'API Error' : 'Invalid Symbol / Key', 'bearish', false);
+                els.chartLoader.classList.add('hidden');
+                return;
+            }
+
+            state.rawCandles = data;
+            calculateTA(data);
+            state.series.main.setData(state.isHeikinAshi ? state.haCandles : state.rawCandles);
+
+            const volData = data.map(d => ({
+                time: d.time,
+                value: d.volume,
+                color: d.close >= d.open ? 'rgba(38, 166, 154, 0.3)' : 'rgba(239, 83, 80, 0.3)'
+            }));
+            state.series.volume.setData(volData);
+
+            state.series.ema20.setData(state.emas.e20);
+            state.series.ema50.setData(state.emas.e50);
+            state.series.ema200.setData(state.emas.e200);
+            state.series.vwap.setData(state.vwap);
+
+            drawSupportResistanceLines(data);
+            updateSidebarPrice(data[data.length - 1], data[data.length - 2]);
+            calculateAndRenderSNR(data);
+            calculateRSI(data);
+
+            connectLiveStream(isCrypto);
+
+            els.chartLoader.classList.add('hidden');
+        }
+
+        function calculateTA(data) {
+            state.haCandles = [];
+            for (let i = 0; i < data.length; i++) {
+                const c = data[i];
+                if (i === 0) {
+                    state.haCandles.push({
+                        time: c.time,
+                        open: c.open,
+                        high: c.high,
+                        low: c.low,
+                        close: (c.open + c.high + c.low + c.close) / 4
+                    });
+                } else {
+                    const prevHA = state.haCandles[i - 1];
+                    const haOpen = (prevHA.open + prevHA.close) / 2;
+                    const haClose = (c.open + c.high + c.low + c.close) / 4;
+                    const haHigh = Math.max(c.high, haOpen, haClose);
+                    const haLow = Math.min(c.low, haOpen, haClose);
+                    state.haCandles.push({ time: c.time, open: haOpen, high: haHigh, low: haLow, close: haClose });
+                }
+            }
+
+            state.emas.e20 = calculateEMA(data, 20);
+            state.emas.e50 = calculateEMA(data, 50);
+            state.emas.e200 = calculateEMA(data, 200);
+            state.vwap = calculateVWAP(data);
+        }
+
+        function calculateEMA(data, period) {
+            const k = 2 / (period + 1);
+            let emaData = [];
+            let currentEma = data[0].close;
+
+            for (let i = 0; i < data.length; i++) {
+                currentEma = (data[i].close - currentEma) * k + currentEma;
+                emaData.push({ time: data[i].time, value: currentEma });
+            }
+            return emaData;
+        }
+
+        function calculateVWAP(data) {
+            let vwapData = [];
+            let cumulativeTPV = 0;
+            let cumulativeVolume = 0;
+
+            for (let i = 0; i < data.length; i++) {
+                const typicalPrice = (data[i].high + data[i].low + data[i].close) / 3;
+                cumulativeTPV += typicalPrice * data[i].volume;
+                cumulativeVolume += data[i].volume;
+
+                vwapData.push({
+                    time: data[i].time,
+                    value: cumulativeVolume === 0 ? typicalPrice : cumulativeTPV / cumulativeVolume
+                });
+            }
+            return vwapData;
+        }
+
+        function drawSupportResistanceLines(data) {
+            if (state.srLines.support) state.series.main.removePriceLine(state.srLines.support);
+            if (state.srLines.resistance) state.series.main.removePriceLine(state.srLines.resistance);
+
+            const lookback = Math.min(50, data.length);
+            const recent = data.slice(data.length - lookback);
+
+            let maxHigh = -Infinity;
+            let minLow = Infinity;
+
+            recent.forEach(c => {
+                if (c.high > maxHigh) maxHigh = c.high;
+                if (c.low < minLow) minLow = c.low;
+            });
+
+            state.srLines.resistance = state.series.main.createPriceLine({
+                price: maxHigh,
+                color: '#EF5350',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: 'Res',
+            });
+
+            state.srLines.support = state.series.main.createPriceLine({
+                price: minLow,
+                color: '#26A69A',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: 'Sup',
+            });
+        }
+
+        function calculateRSI(data, period = 14) {
+            if (data.length < period + 1) return;
+
+            let gains = 0, losses = 0;
+            for (let i = 1; i <= period; i++) {
+                const change = data[i].close - data[i - 1].close;
+                if (change > 0) gains += change;
+                else losses -= change;
+            }
+
+            let avgGain = gains / period;
+            let avgLoss = losses / period;
+
+            for (let i = period + 1; i < data.length; i++) {
+                const change = data[i].close - data[i - 1].close;
+                let currentGain = change > 0 ? change : 0;
+                let currentLoss = change < 0 ? -change : 0;
+
+                avgGain = (avgGain * (period - 1) + currentGain) / period;
+                avgLoss = (avgLoss * (period - 1) + currentLoss) / period;
+            }
+
+            const rs = avgGain / (avgLoss === 0 ? 1 : avgLoss);
+            const rsi = 100 - (100 / (1 + rs));
+
+            els.rsiValue.textContent = rsi.toFixed(1);
+            els.rsiBar.style.width = `${rsi}%`;
+
+            if (rsi > 70) {
+                els.rsiValue.className = 'text-xl font-bold mono text-bearish';
+                els.rsiBar.className = 'h-full bg-bearish transition-all duration-500';
+            } else if (rsi < 30) {
+                els.rsiValue.className = 'text-xl font-bold mono text-bullish';
+                els.rsiBar.className = 'h-full bg-bullish transition-all duration-500 shadow-[0_0_10px_rgba(38,166,154,0.5)]';
+            } else {
+                els.rsiValue.className = 'text-xl font-bold mono text-textBright';
+                els.rsiBar.className = 'h-full bg-info transition-all duration-500';
+            }
+        }
+
+        function calculateAndRenderSNR(data, period = 14) {
+            if (data.length < period * 2) return;
+
+            let trSum = 0, pDmSum = 0, nDmSum = 0;
+            const tr = [], pDm = [], nDm = [];
+
+            for (let i = 1; i < data.length; i++) {
+                const c = data[i];
+                const p = data[i - 1];
+
+                const trueRange = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
+                tr.push(trueRange);
+
+                const upMove = c.high - p.high;
+                const downMove = p.low - c.low;
+
+                let plusDM = 0, minusDM = 0;
+                if (upMove > downMove && upMove > 0) plusDM = upMove;
+                if (downMove > upMove && downMove > 0) minusDM = downMove;
+
+                pDm.push(plusDM);
+                nDm.push(minusDM);
+            }
+
+            const smoothedTR = [tr.slice(0, period).reduce((a, b) => a + b, 0)];
+            const smoothedPDM = [pDm.slice(0, period).reduce((a, b) => a + b, 0)];
+            const smoothedNDM = [nDm.slice(0, period).reduce((a, b) => a + b, 0)];
+            const dx = [];
+
+            for (let i = period; i < tr.length; i++) {
+                smoothedTR.push(smoothedTR[smoothedTR.length - 1] - (smoothedTR[smoothedTR.length - 1] / period) + tr[i]);
+                smoothedPDM.push(smoothedPDM[smoothedPDM.length - 1] - (smoothedPDM[smoothedPDM.length - 1] / period) + pDm[i]);
+                smoothedNDM.push(smoothedNDM[smoothedNDM.length - 1] - (smoothedNDM[smoothedNDM.length - 1] / period) + nDm[i]);
+
+                const pDI = 100 * (smoothedPDM[smoothedPDM.length - 1] / smoothedTR[smoothedTR.length - 1]);
+                const nDI = 100 * (smoothedNDM[smoothedNDM.length - 1] / smoothedTR[smoothedTR.length - 1]);
+                const dirIdx = 100 * Math.abs(pDI - nDI) / (pDI + nDI || 1);
+                dx.push(dirIdx);
+            }
+
+            let adxVal = dx.slice(0, period).reduce((a, b) => a + b, 0) / period;
+            for (let i = period; i < dx.length; i++) {
+                adxVal = ((adxVal * (period - 1)) + dx[i]) / period;
+            }
+
+            adxVal = adxVal.toFixed(1);
+            els.adxValue.textContent = adxVal;
+
+            let widthPcnt = Math.min((adxVal / 60) * 100, 100);
+            els.adxBar.style.width = `${widthPcnt}%`;
+
+            if (adxVal < 20) {
+                els.adxValue.className = 'text-xl font-bold mono text-textMuted';
+                els.adxBar.className = 'h-full bg-textMuted transition-all duration-500';
+                els.snrAlertBox.className = 'p-3 rounded bg-bgDark border border-borderDark text-xs leading-relaxed text-textMuted';
+                els.snrAlertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i> <strong>HIGH NOISE / CHOP.</strong> ADX is extremely low. The market is ranging. Avoid trend-following strategies until volatility returns.';
+            } else if (adxVal >= 20 && adxVal < 35) {
+                els.adxValue.className = 'text-xl font-bold mono text-info';
+                els.adxBar.className = 'h-full bg-info transition-all duration-500';
+                els.snrAlertBox.className = 'p-3 rounded bg-info/10 border border-info/30 text-xs leading-relaxed text-info';
+                els.snrAlertBox.innerHTML = '<i class="fa-solid fa-check-circle mr-1"></i> <strong>TREND FORMING.</strong> Noise is clearing. Suitable environment for directional trades.';
+            } else {
+                els.adxValue.className = 'text-xl font-bold mono text-warning';
+                els.adxBar.className = 'h-full bg-warning transition-all duration-500 shadow-[0_0_10px_rgba(245,166,35,0.5)]';
+                els.snrAlertBox.className = 'p-3 rounded bg-warning/10 border border-warning/30 text-xs leading-relaxed text-warning';
+                els.snrAlertBox.innerHTML = '<i class="fa-solid fa-fire mr-1"></i> <strong>STRONG TREND / LOW NOISE.</strong> High market clarity. Excellent conditions for trailing stops and letting winners run.';
+            }
+        }
+
+        async function loadMTFData() {
+            els.mtfLoader.classList.remove('hidden');
+            const tfs = ['15m', '1h', '4h', '1d'];
+            let scores = [];
+            const isCrypto = state.symbol.includes('USDT');
+
+            for (let tf of tfs) {
+                const domEl = document.getElementById(`mtf-${tf}`);
+                domEl.textContent = '...';
+
+                const data = isCrypto ? await fetchBinanceKlines(state.symbol, tf, 60) : await fetchFinnhubCandles(state.symbol, tf, 60);
+
+                if (data.length > 0) {
+                    const currentPrice = data[data.length - 1].close;
+                    const ema50Data = calculateEMA(data, 50);
+                    const currentEma = ema50Data[ema50Data.length - 1].value;
+                    const isBullish = currentPrice > currentEma;
+
+                    if (isBullish) {
+                        domEl.innerHTML = '<span class="text-bullish"><i class="fa-solid fa-arrow-up"></i> BULLISH</span>';
+                        scores.push(1);
+                    } else {
+                        domEl.innerHTML = '<span class="text-bearish"><i class="fa-solid fa-arrow-down"></i> BEARISH</span>';
+                        scores.push(-1);
+                    }
+
+                    const row = domEl.parentElement;
+                    if (tf === state.tf) {
+                        row.classList.add('border-l-2', 'border-l-info');
+                    } else {
+                        row.classList.remove('border-l-2', 'border-l-info');
+                    }
+                }
+            }
+
+            const totalScore = scores.reduce((a, b) => a + b, 0);
+            const verdictEl = els.mtfVerdict;
+
+            if (totalScore === 4) {
+                verdictEl.className = 'text-lg font-bold text-bullish';
+                verdictEl.textContent = 'STRONG BULLISH ALIGNMENT';
+                if (state.alertsEnabled && state.mtfData[state.symbol] !== 4) playAlertSound();
+                state.mtfData[state.symbol] = 4;
+            } else if (totalScore === -4) {
+                verdictEl.className = 'text-lg font-bold text-bearish';
+                verdictEl.textContent = 'STRONG BEARISH ALIGNMENT';
+                if (state.alertsEnabled && state.mtfData[state.symbol] !== -4) playAlertSound();
+                state.mtfData[state.symbol] = -4;
+            } else if (totalScore > 0) {
+                verdictEl.className = 'text-lg font-bold text-info';
+                verdictEl.textContent = 'SLIGHT BULLISH BIAS';
+                state.mtfData[state.symbol] = totalScore;
+            } else if (totalScore < 0) {
+                verdictEl.className = 'text-lg font-bold text-warning';
+                verdictEl.textContent = 'SLIGHT BEARISH BIAS';
+                state.mtfData[state.symbol] = totalScore;
+            } else {
+                verdictEl.className = 'text-lg font-bold text-textMuted';
+                verdictEl.textContent = 'NOISE / CONFLICTING TFs';
+                state.mtfData[state.symbol] = 0;
+            }
+
+            els.mtfLoader.classList.add('hidden');
+        }
+
+        function connectLiveStream(isCrypto) {
+            if (isCrypto) {
+                const wsUrl = `wss://stream.binance.com:9443/ws/${state.symbol.toLowerCase()}@kline_${state.tf}`;
+                state.ws = new WebSocket(wsUrl);
+
+                state.ws.onopen = () => {
+                    setStatus('Live Data Stream (Binance)', 'bullish', true);
+                };
+
+                state.ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    const k = msg.k;
+                    processLiveTick(k.t / 1000, parseFloat(k.o), parseFloat(k.h), parseFloat(k.l), parseFloat(k.c), parseFloat(k.v));
+                };
+
+                state.ws.onerror = () => setStatus('Connection Error', 'bearish', false);
+                state.ws.onclose = () => setStatus('Disconnected. Reconnecting...', 'warning', false);
+            } else {
+                if (!state.apiKey) return;
+                const wsUrl = `wss://ws.finnhub.io?token=${state.apiKey}`;
+                state.ws = new WebSocket(wsUrl);
+
+                state.ws.onopen = () => {
+                    setStatus('Live Stream (Finnhub)', 'bullish', true);
+                    state.ws.send(JSON.stringify({ type: 'subscribe', symbol: state.symbol }));
+                };
+
+                state.ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'trade' && msg.data && msg.data.length > 0) {
+                        const trade = msg.data[0];
+                        const lastCandle = state.rawCandles[state.rawCandles.length - 1];
+                        const newTime = lastCandle.time;
+                        const price = trade.p;
+                        const vol = trade.v;
+                        const h = Math.max(lastCandle.high, price);
+                        const l = Math.min(lastCandle.low, price);
+                        processLiveTick(newTime, lastCandle.open, h, l, price, lastCandle.volume + vol);
+                    }
+                };
+
+                state.ws.onerror = () => setStatus('Connection Error', 'bearish', false);
+                state.ws.onclose = () => setStatus('Market Closed / Disconnected', 'textMuted', false);
+            }
+        }
+
+        function processLiveTick(time, o, h, l, c, v) {
+            const liveCandle = { time: time, open: o, high: h, low: l, close: c, volume: v };
+            const lastIdx = state.rawCandles.length - 1;
+            const isNew = liveCandle.time > state.rawCandles[lastIdx].time;
+
+            if (isNew) state.rawCandles.push(liveCandle);
+            else state.rawCandles[lastIdx] = liveCandle;
+
+            if (state.isHeikinAshi) {
+                const haPrev = state.haCandles[isNew ? lastIdx : lastIdx - 1];
+                const haOpen = (haPrev.open + haPrev.close) / 2;
+                const haClose = (liveCandle.open + liveCandle.high + liveCandle.low + liveCandle.close) / 4;
+                const haHigh = Math.max(liveCandle.high, haOpen, haClose);
+                const haLow = Math.min(liveCandle.low, haOpen, haClose);
+
+                const newHACandle = { time: liveCandle.time, open: haOpen, high: haHigh, low: haLow, close: haClose };
+                if (isNew) state.haCandles.push(newHACandle);
+                else state.haCandles[lastIdx] = newHACandle;
+
+                state.series.main.update(newHACandle);
+            } else {
+                state.series.main.update(liveCandle);
+            }
+
+            state.series.volume.update({
+                time: liveCandle.time,
+                value: liveCandle.volume,
+                color: liveCandle.close >= liveCandle.open ? 'rgba(38, 166, 154, 0.3)' : 'rgba(239, 83, 80, 0.3)'
+            });
+
+            updateSidebarPrice(liveCandle, state.rawCandles[state.rawCandles.length - 2]);
+            if (isNew) calculateRSI(state.rawCandles);
+        }
+
+        function updateSidebarPrice(current, previous) {
+            if (!current) return;
+            const price = current.close;
+            els.currentPrice.textContent = price >= 10 ? price.toLocaleString('en-US', { minimumFractionDigits: 2 }) : price.toFixed(4);
+
+            if (previous) {
+                const diff = price - previous.close;
+                const pcnt = (diff / previous.close) * 100;
+
+                els.priceChange.textContent = `${diff > 0 ? '+' : ''}${diff.toFixed(2)} (${pcnt.toFixed(2)}%)`;
+                els.priceChange.className = `text-sm font-medium mono ${diff >= 0 ? 'text-bullish' : 'text-bearish'}`;
+                els.currentPrice.style.color = diff >= 0 ? '#26A69A' : '#EF5350';
+            }
+        }
+
+        function setStatus(text, colorClass, ping) {
+            els.statusText.textContent = text;
+            els.statusDot.className = `relative inline-flex rounded-full h-2.5 w-2.5 bg-${colorClass}`;
+            if (ping) {
+                els.statusPing.classList.remove('hidden');
+                els.statusPing.className = `animate-ping absolute inline-flex h-full w-full rounded-full bg-${colorClass} opacity-75`;
+            } else {
+                els.statusPing.classList.add('hidden');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

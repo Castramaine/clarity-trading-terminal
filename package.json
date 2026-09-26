@@ -1,0 +1,25 @@
+{
+  "name": "clarity-trading-terminal",
+  "version": "1.0.0",
+  "description": "Clarity — noise-reduction trading terminal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "trading",
+    "crypto",
+    "stocks",
+    "charts",
+    "terminal"
+  ],
+  "author": "Castramaine",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
