@@ -10,6 +10,39 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, status: 'Clarity server running' });
 });
 
+app.get('/api/news', (_req, res) => {
+  res.json([
+    {
+      title: 'BTC demand remains firm above key support',
+      source: 'CoinDesk',
+      time: '2m ago',
+      impact: 'High',
+      summary: 'Spot demand and ETF flows remain constructive while volatility compresses.'
+    },
+    {
+      title: 'Semiconductor names absorb macro volatility',
+      source: 'CNBC',
+      time: '14m ago',
+      impact: 'Medium',
+      summary: 'AI infrastructure demand continues to support tech leadership.'
+    },
+    {
+      title: 'Treasury yields stay elevated',
+      source: 'Bloomberg',
+      time: '18m ago',
+      impact: 'Medium',
+      summary: 'Higher rates are keeping risk appetite measured across global equities.'
+    },
+    {
+      title: 'Volatility compression improves risk-taking',
+      source: 'MarketWatch',
+      time: '31m ago',
+      impact: 'Low',
+      summary: 'Options implied volatility is cooling across major digital and equity assets.'
+    }
+  ]);
+});
+
 app.get('/api/market', async (req, res) => {
   const { symbol, interval = '1h', limit = '500', apiKey = '' } = req.query;
 
@@ -89,6 +122,10 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Clarity app is running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Clarity app is running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
