@@ -56,10 +56,20 @@
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
         }
+        .news-card {
+            background: rgba(11, 14, 20, 0.9);
+            border: 1px solid rgba(42, 46, 57, 0.8);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+        .watchlist-item.active {
+            border-color: rgba(41, 98, 255, 0.8);
+            background: rgba(41, 98, 255, 0.08);
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen w-screen">
-    <header class="h-16 border-b border-borderDark panelBg flex items-center justify-between px-4 shrink-0 z-20">
+    <header class="h-16 border-b border-borderDark bg-panelBg flex items-center justify-between px-4 shrink-0 z-20">
         <div class="flex items-center gap-6">
             <div class="flex items-center gap-2">
                 <i class="fa-solid fa-layer-group text-info text-xl"></i>
@@ -229,13 +239,92 @@
                 </div>
             </div>
 
-            <div id="chartContainer" class="flex-1 w-full h-full"></div>
+            <div class="flex-1 flex flex-col">
+                <div id="chartContainer" class="flex-1 w-full h-full"></div>
+
+                <div class="h-40 border-t border-borderDark bg-panelBg/80 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-newspaper text-info"></i>
+                            <h3 class="text-sm font-semibold uppercase tracking-wider text-textBright">Market Pulse</h3>
+                        </div>
+                        <button class="text-[10px] uppercase tracking-wider text-textMuted hover:text-textBright">Live</button>
+                    </div>
+                    <div id="newsList" class="grid grid-cols-2 gap-3 h-[calc(100%-30px)] overflow-hidden"></div>
+                </div>
+            </div>
 
             <div id="chartLoader" class="absolute inset-0 bg-bgDark/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center hidden">
                 <div class="loader mb-4"></div>
                 <div class="text-sm font-medium text-textMuted" id="loaderText">Fetching real market data...</div>
             </div>
         </section>
+
+        <aside class="w-80 border-l border-borderDark bg-panelBg flex flex-col z-10 shrink-0 overflow-y-auto">
+            <div class="p-4 border-b border-borderDark">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-warning"></i>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-textBright">Watchlist</h3>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-textMuted">5 Assets</span>
+                </div>
+                <div id="watchlistList" class="space-y-2"></div>
+            </div>
+
+            <div class="p-4 border-b border-borderDark">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-trend-up text-bullish"></i>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-textBright">Quick Trade</h3>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-textMuted">Paper</span>
+                </div>
+
+                <form id="orderForm" class="space-y-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-wider text-textMuted mb-1">Side</label>
+                            <select id="orderSide" class="w-full bg-bgDark border border-borderDark rounded px-2 py-2 text-sm text-textBright focus:outline-none">
+                                <option value="Buy">Buy</option>
+                                <option value="Sell">Sell</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase tracking-wider text-textMuted mb-1">Type</label>
+                            <select id="orderType" class="w-full bg-bgDark border border-borderDark rounded px-2 py-2 text-sm text-textBright focus:outline-none">
+                                <option value="Market">Market</option>
+                                <option value="Limit">Limit</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-textMuted mb-1">Quantity</label>
+                        <input id="orderQty" type="number" min="0.01" step="0.01" value="0.25" class="w-full bg-bgDark border border-borderDark rounded px-3 py-2 text-sm text-textBright focus:outline-none focus:border-info">
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-textMuted mb-1">Limit Price</label>
+                        <input id="orderLimit" type="number" min="0" step="0.01" class="w-full bg-bgDark border border-borderDark rounded px-3 py-2 text-sm text-textBright focus:outline-none focus:border-info">
+                    </div>
+
+                    <button type="submit" class="w-full bg-info/20 border border-info/50 text-info rounded px-3 py-2 text-sm font-medium hover:bg-info hover:text-white transition">
+                        Place Order
+                    </button>
+                </form>
+            </div>
+
+            <div class="p-4 flex-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-clock-rotate-left text-textMuted"></i>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-textBright">Recent Orders</h3>
+                </div>
+                <div id="orderStatus" class="rounded bg-bgDark border border-borderDark p-3 text-xs text-textMuted leading-relaxed">
+                    No active orders yet. Use the ticket to simulate a paper trade.
+                </div>
+            </div>
+        </aside>
     </main>
 
     <div id="apiModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center">
@@ -264,6 +353,15 @@
             vwap: [],
             ws: null,
             chart: null,
+            watchlist: [
+                { symbol: 'BTCUSDT', name: 'Bitcoin', price: 62000, change: 1.6 },
+                { symbol: 'ETHUSDT', name: 'Ethereum', price: 3500, change: 0.9 },
+                { symbol: 'SOLUSDT', name: 'Solana', price: 158, change: 2.4 },
+                { symbol: 'AAPL', name: 'Apple', price: 215.4, change: -0.4 },
+                { symbol: 'NVDA', name: 'NVIDIA', price: 128.9, change: 1.2 }
+            ],
+            news: [],
+            orderStatus: 'No active orders yet. Use the ticket to simulate a paper trade.',
             series: {
                 main: null,
                 volume: null,
@@ -310,14 +408,25 @@
             legendE20: document.getElementById('legendE20'),
             legendE50: document.getElementById('legendE50'),
             legendE200: document.getElementById('legendE200'),
-            legendEMAs: document.getElementById('legendEMAs')
+            legendEMAs: document.getElementById('legendEMAs'),
+            watchlistList: document.getElementById('watchlistList'),
+            newsList: document.getElementById('newsList'),
+            orderForm: document.getElementById('orderForm'),
+            orderSide: document.getElementById('orderSide'),
+            orderType: document.getElementById('orderType'),
+            orderQty: document.getElementById('orderQty'),
+            orderLimit: document.getElementById('orderLimit'),
+            orderStatus: document.getElementById('orderStatus')
         };
 
         async function init() {
             initChart();
             setupEventListeners();
+            await loadNews();
+            renderWatchlist();
             await loadMainChartData();
             loadMTFData();
+            populateOrderDefaults();
         }
 
         function initChart() {
@@ -408,6 +517,8 @@
                 state.symbol = e.target.value;
                 els.sidebarSymbol.textContent = state.symbol.replace('USDT', '/USDT');
                 els.legendSymbol.textContent = state.symbol;
+                renderWatchlist();
+                populateOrderDefaults();
                 await loadMainChartData();
                 loadMTFData();
             });
@@ -426,10 +537,95 @@
 
                     state.tf = selectedTf;
                     els.sidebarTf.textContent = e.target.textContent + ' Chart';
-
                     await loadMainChartData();
                 });
             });
+
+            els.orderForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const side = els.orderSide.value;
+                const type = els.orderType.value;
+                const qty = Number(els.orderQty.value || 0);
+                const price = Number(els.orderLimit.value || 0);
+                const current = state.rawCandles[state.rawCandles.length - 1]?.close || state.watchlist.find(item => item.symbol === state.symbol)?.price || 0;
+
+                state.orderStatus = `${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | ${side} ${qty} ${state.symbol} @ ${type === 'Limit' ? '$'+price.toFixed(2) : '$'+current.toFixed(2)} (${type})`;
+                els.orderStatus.className = 'rounded bg-bgDark border border-borderDark p-3 text-xs text-textBright leading-relaxed';
+                els.orderStatus.textContent = state.orderStatus;
+
+                playAlertSound();
+            });
+        }
+
+        function renderWatchlist() {
+            els.watchlistList.innerHTML = state.watchlist.map(item => {
+                const isActive = item.symbol === state.symbol;
+                const isUp = item.change >= 0;
+                return `
+                    <button class="watchlist-item w-full text-left rounded border ${isActive ? 'active border-info/60' : 'border-borderDark bg-bgDark'} p-2.5 transition hover:border-info/40" data-symbol="${item.symbol}">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="text-sm font-semibold text-textBright">${item.symbol}</div>
+                                <div class="text-[10px] uppercase tracking-wider text-textMuted">${item.name}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm font-mono ${isUp ? 'text-bullish' : 'text-bearish'}">${Number(item.price).toLocaleString(undefined, { maximumFractionDigits: item.symbol.includes('USDT') ? 2 : 2 })}</div>
+                                <div class="text-[10px] ${isUp ? 'text-bullish' : 'text-bearish'}">${isUp ? '+' : ''}${item.change.toFixed(2)}%</div>
+                            </div>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+
+            els.watchlistList.querySelectorAll('.watchlist-item').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    state.symbol = btn.dataset.symbol;
+                    els.assetSelect.value = state.symbol;
+                    els.sidebarSymbol.textContent = state.symbol.replace('USDT', '/USDT');
+                    els.legendSymbol.textContent = state.symbol;
+                    renderWatchlist();
+                    populateOrderDefaults();
+                    await loadMainChartData();
+                    loadMTFData();
+                });
+            });
+        }
+
+        function populateOrderDefaults() {
+            const current = state.rawCandles[state.rawCandles.length - 1]?.close || state.watchlist.find(item => item.symbol === state.symbol)?.price || 0;
+            if (els.orderLimit) els.orderLimit.value = current.toFixed(state.symbol.includes('USDT') ? 2 : 2);
+            if (els.orderQty) els.orderQty.value = state.symbol.includes('USDT') ? '0.25' : '5';
+        }
+
+        async function loadNews() {
+            try {
+                const res = await fetch('/api/news');
+                if (!res.ok) throw new Error('News fetch failed');
+                const data = await res.json();
+                state.news = data;
+            } catch (error) {
+                state.news = [
+                    { title: 'Macro Risk Remains Elevated', source: 'Bloomberg', time: '2m ago', impact: 'High', summary: 'Treasury yields and USD strength continue to pressure risk assets.' },
+                    { title: 'BTC Demand Signals Strength', source: 'CoinDesk', time: '11m ago', impact: 'Medium', summary: 'ETF inflows and spot demand remain supportive above key liquidity zones.' },
+                    { title: 'Semiconductor Pressures Ease', source: 'CNBC', time: '23m ago', impact: 'Medium', summary: 'AI infrastructure spending remains intact despite broader valuation pullbacks.' },
+                    { title: 'Volatility Compression Continues', source: 'MarketWatch', time: '39m ago', impact: 'Low', summary: 'Short-term options implied volatility is trending lower across major indices.' }
+                ];
+            }
+
+            renderNews();
+        }
+
+        function renderNews() {
+            els.newsList.innerHTML = state.news.slice(0, 4).map(item => `
+                <article class="news-card flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-[9px] uppercase tracking-wider text-textMuted">
+                        <span>${item.source}</span>
+                        <span class="px-1.5 py-0.5 rounded bg-bgDark border border-borderDark ${item.impact === 'High' ? 'text-warning' : item.impact === 'Medium' ? 'text-info' : 'text-bullish'}">${item.impact}</span>
+                    </div>
+                    <div class="mt-2 text-xs font-semibold text-textBright leading-snug">${item.title}</div>
+                    <div class="mt-2 text-[10px] text-textMuted">${item.time}</div>
+                </article>
+            `).join('');
         }
 
         function toggleHeikinAshi() {
@@ -512,14 +708,7 @@
                 throw new Error(err.error || 'API Error');
             }
             const data = await res.json();
-            return data.map(d => ({
-                time: d.time,
-                open: d.open,
-                high: d.high,
-                low: d.low,
-                close: d.close,
-                volume: d.volume
-            }));
+            return data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume }));
         }
 
         async function fetchFinnhubCandles(symbol, interval, limit = 500) {
@@ -578,10 +767,19 @@
             updateSidebarPrice(data[data.length - 1], data[data.length - 2]);
             calculateAndRenderSNR(data);
             calculateRSI(data);
-
+            syncWatchlistPrice(data[data.length - 1].close, data[data.length - 2]?.close);
             connectLiveStream(isCrypto);
 
             els.chartLoader.classList.add('hidden');
+        }
+
+        function syncWatchlistPrice(current, previous) {
+            const item = state.watchlist.find(asset => asset.symbol === state.symbol);
+            if (!item) return;
+            const pct = previous ? ((current - previous) / previous) * 100 : 0;
+            item.price = current;
+            item.change = pct;
+            renderWatchlist();
         }
 
         function calculateTA(data) {
@@ -719,7 +917,6 @@
         function calculateAndRenderSNR(data, period = 14) {
             if (data.length < period * 2) return;
 
-            let trSum = 0, pDmSum = 0, nDmSum = 0;
             const tr = [], pDm = [], nDm = [];
 
             for (let i = 1; i < data.length; i++) {
@@ -761,10 +958,10 @@
                 adxVal = ((adxVal * (period - 1)) + dx[i]) / period;
             }
 
-            adxVal = adxVal.toFixed(1);
+            adxVal = Number(adxVal.toFixed(1));
             els.adxValue.textContent = adxVal;
 
-            let widthPcnt = Math.min((adxVal / 60) * 100, 100);
+            const widthPcnt = Math.min((adxVal / 60) * 100, 100);
             els.adxBar.style.width = `${widthPcnt}%`;
 
             if (adxVal < 20) {
@@ -927,6 +1124,7 @@
             });
 
             updateSidebarPrice(liveCandle, state.rawCandles[state.rawCandles.length - 2]);
+            syncWatchlistPrice(liveCandle.close, state.rawCandles[state.rawCandles.length - 2]?.close);
             if (isNew) calculateRSI(state.rawCandles);
         }
 
